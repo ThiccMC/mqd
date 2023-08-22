@@ -6,18 +6,37 @@ use std::{
   net::TcpListener,
 };
 
+use clap::Parser;
 use gamedig::games::mc;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+struct PingConfig {
+  pub host: String,
+  pub port: u16,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+  pub bind: String,
+  pub popts: PingConfig,
+}
+
+#[derive(Parser, Debug)]
+struct Args {
+  #[arg(short, long, default_value_t = String::from("./config.ron"))]
+  pub confile: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct QueryResult {
   pub e: u8,
   pub current: u32,
   pub max: u32,
 }
 
-fn ping(bucket: &mut VecDeque<QueryResult>, ret: Option<u8>) -> Option<()> {
-  let r = mc::query(&"127.0.0.1".parse().unwrap(), Some(25565));
+fn ping(bucket: &mut VecDeque<QueryResult>, opts: &PingConfig, ret: Option<u8>) -> Option<()> {
+  let r = mc::query(&(opts.host).parse().unwrap(), Some(opts.port));
   if r.is_ok() {
     let u = r.unwrap();
     bucket.push_back(QueryResult {
@@ -31,7 +50,7 @@ fn ping(bucket: &mut VecDeque<QueryResult>, ret: Option<u8>) -> Option<()> {
     if u > 3 {
       return None;
     } else {
-      ping(bucket, Some(u + 1))
+      ping(bucket, opts, Some(u + 1))
     }
   }
 }
@@ -52,11 +71,17 @@ fn load(bucket: &mut VecDeque<QueryResult>) {
 fn main() {
   env_logger::init();
 
+  let args = Args::parse();
+
+  let config_file_buffer = fs::read(args.confile).unwrap();
+  let config_data = std::str::from_utf8(&config_file_buffer).unwrap();
+  let conf: Config = ron::from_str(config_data).unwrap();
+
   let mut bucket: VecDeque<QueryResult> = VecDeque::new();
   if fs::metadata("./u344").is_ok() {
     load(&mut bucket)
   };
-  let listener = TcpListener::bind("0.0.0.0:8080").unwrap();
+  let listener = TcpListener::bind(conf.bind).unwrap();
   info!("Server started on port 8080");
   for stream in listener.incoming() {
     match stream {
@@ -81,7 +106,7 @@ fn main() {
               if bucket.len() >= 32 {
                 bucket.pop_front();
               }
-              if ping(&mut bucket, None).is_some() {
+              if ping(&mut bucket, &conf.popts, None).is_some() {
                 "ok".to_string()
               } else {
                 "nope".to_string()
