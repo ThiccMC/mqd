@@ -1,0 +1,4 @@
+# ping every minute
+* * * * *   /usr/sbin/mq cron
+# save every 3 minute
+*/3 * * * * /usr/sbin/mq freeze

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+printf $@ | ncat -t $CRON_HOST $CRON_PORT > /var/log/mqcl-$(date +%d%h%y_%Hh%Mm%S)-$1.log
